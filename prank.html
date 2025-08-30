@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="id" class="h-full">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>PRANK — Security Alert (Simulasi)</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    /* radar style - size controlled via Tailwind classes */
+    .radar {
+      border-radius: 50%;
+      background: radial-gradient(circle at 50% 50%, rgba(16,185,129,0.06) 0%, transparent 35%);
+      border: 1px solid rgba(34,197,94,0.12);
+      position: relative;
+      overflow: hidden;
+      box-shadow: 0 8px 30px rgba(0,0,0,0.6), inset 0 0 40px rgba(0,0,0,0.25);
+    }
+    .radar::before {
+      content: '';
+      position: absolute;
+      inset: -50%;
+      background: conic-gradient(from 0deg, rgba(16,185,129,0.45) 0deg, transparent 20deg);
+      animation: spin 3s linear infinite;
+      transform-origin: center;
+      opacity: .9;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .overlay-locked { backdrop-filter: blur(4px) saturate(120%); }
+  </style>
+</head>
+<body class="bg-[#0b0f13] text-zinc-200 font-sans leading-relaxed min-h-screen flex items-center justify-center p-6">
+  <div class="max-w-3xl w-full">
+    <div class="flex items-center justify-between mb-6 flex-wrap gap-4">
+      <div class="flex items-center gap-4">
+        <div class="radar w-32 h-32 sm:w-44 sm:h-44"></div>
+        <div>
+          <h1 class="text-2xl font-semibold">Device  Scanner Profile</h1>
+          <p class="text-sm text-zinc-400"></p>
+        </div>
+      </div>
+      <div class="text-right">
+        <div id="statusBadge" class="inline-block px-3 py-1 rounded-full bg-amber-600 text-black font-medium">AUTO</div>
+      </div>
+    </div>
+
+    <div class="bg-[#061014] border border-zinc-800 rounded-lg p-5 shadow-lg">
+      <div class="mb-4">
+        <div class="w-full bg-zinc-900 rounded-full h-2 overflow-hidden">
+          <div id="progressBar" class="h-2 w-0 bg-gradient-to-r from-emerald-400 via-emerald-300 to-emerald-500 transition-all duration-300"></div>
+        </div>
+        <div class="flex justify-between text-xs text-zinc-500 mt-2">
+          <div id="progressText">0%</div>
+          <div id="timeLeft">-- s</div>
+        </div>
+      </div>
+
+      <div id="log" class="bg-black/40 rounded-md p-3 text-xs h-48 overflow-auto font-mono text-emerald-200"></div>
+
+      <div class="flex gap-3 mt-4">
+        <button id="btnFakeClose" class="px-3 py-2 rounded bg-zinc-800 border border-zinc-700 text-sm">✕ Tutup</button>
+        <button id="btnReset" class="ml-auto px-3 py-2 rounded bg-emerald-600 text-black text-sm">Reset</button>
+      </div>
+    </div>
+
+    <p class="text-xs text-zinc-500 mt-3">⚠️ <span class="text-amber-400">PERINGATAN:</span>Scanner handphone berbahaya.</p>
+  </div>
+  
+  <!-- Fullscreen locked alert (cannot be closed normally) -->
+  <div id="lockedOverlay" class="fixed inset-0 bg-black/85 hidden items-center justify-center z-50 overlay-locked">
+    <div class="max-w-2xl mx-6 bg-gradient-to-br from-red-900 via-red-800 to-black rounded-2xl p-8 text-center shadow-2xl border border-red-600">
+      <div class="text-6xl mb-4 animate-pulse">⚠️</div>
+      <h2 class="text-2xl font-bold text-red-200 mb-2">Virus Success</h2>
+      <p class="text-red-100 mb-6">Wkwk Kepo amat sama hidup orang lain.</p>
+
+      <div class="flex justify-center gap-3">
+        <button id="lockedBtnFakeClose" class="px-4 py-2 rounded bg-zinc-800 border border-zinc-700">Tutup</button>
+      </div>
+
+      <p class="text-xs text-zinc-400 mt-4"><b>Hanya Prank Hiburan</b></p>
+    </div>
+  </div>
+
+  <!-- CAMERA overlay -->
+  <div id="cameraOverlay" class="fixed inset-0 bg-black hidden items-center justify-center z-60">
+    <video id="cameraFeed" autoplay playsinline muted class="w-full h-full object-cover"></video>
+    <button id="closeCamera" class="absolute top-4 right-4 px-4 py-2 bg-red-600 text-white rounded">✕</button>
+  </div>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      // CONFIG
+      const TOTAL_SECONDS = 5; // durasi scan palsu
+      const LOG_LINES = [
+        '[00:01] Memindai port jaringan...',
+        '[00:02] Membuka Akses Whatsapp...',
+        '[00:03] Membuka Akses Faceebok...',
+        '[00:04] Membuka Akses Instagram...',
+        '[00:05] Mendapatkan akses email...',
+        '[00:06] Memeriksa izin aplikasi...',
+        '[00:07] Analisis behavior service...',
+        '[00:08] Mendeteksi stream audio aktif...',
+        '[00:09] Encrypt Data...',
+        '[00:10] Success...',
+      ];
+
+      // ELEMENTS (safe selection)
+      const progressBar = document.getElementById('progressBar');
+      const progressText = document.getElementById('progressText');
+      const timeLeft = document.getElementById('timeLeft');
+      const log = document.getElementById('log');
+      const statusBadge = document.getElementById('statusBadge');
+      const lockedOverlay = document.getElementById('lockedOverlay');
+
+      const btnFakeClose = document.getElementById('btnFakeClose');
+      const btnReset = document.getElementById('btnReset');
+      const lockedBtnFakeClose = document.getElementById('lockedBtnFakeClose');
+      const lockedBtnExplain = document.getElementById('lockedBtnExplain');
+
+      const cameraOverlay = document.getElementById("cameraOverlay");
+      const cameraFeed = document.getElementById("cameraFeed");
+      const closeCamera = document.getElementById("closeCamera");
+
+      let scanTimer = null;
+      let currentStream = null;
+
+      // Audio helper (WebAudio)
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      let audioCtx = null;
+      function playBeep(freq = 880, duration = 120) {
+        try {
+          if (!audioCtx) audioCtx = new AudioCtx();
+          const o = audioCtx.createOscillator();
+          const g = audioCtx.createGain();
+          o.type = 'sine';
+          o.frequency.value = freq;
+          g.gain.value = 0.03;
+          o.connect(g); g.connect(audioCtx.destination);
+          o.start();
+          setTimeout(() => { o.stop(); }, duration);
+        } catch (e) {
+          // audio may be blocked until user gesture; ignore
+        }
+      }
+
+      // Start scan
+      function startScan() {
+  clearInterval(scanTimer);
+  log.innerHTML = '';
+  progressBar.style.width = '0%';
+  statusBadge.textContent = 'MEMINDAI';
+
+  const totalTicks = TOTAL_SECONDS * 10;
+  let tick = 0;
+  let logIndex = 0; // index untuk log agar berurutan
+
+  scanTimer = setInterval(() => {
+    tick++;
+    const pct = Math.min(100, Math.floor((tick / totalTicks) * 100));
+    progressBar.style.width = pct + '%';
+    progressText.textContent = pct + '%';
+    timeLeft.textContent = Math.max(0, TOTAL_SECONDS - Math.floor(tick/10)) + ' s';
+
+    // tampilkan log tiap 0.3 detik (tick % 3 == 0)
+    if (tick % 3 === 0 && logIndex < LOG_LINES.length) {
+      const li = LOG_LINES[logIndex++];
+      const d = document.createElement('div');
+      d.textContent = li || '[..] ...';
+      log.appendChild(d);
+      log.scrollTop = log.scrollHeight;
+      playBeep(600 + (Math.random() * 400), 80);
+    }
+
+    if (tick >= totalTicks) {
+      finishScan();
+    }
+  }, 100);
+}
+
+      function finishScan() {
+        clearInterval(scanTimer);
+        playFinalAlarm();
+        statusBadge.textContent = 'TERKOMPROMI';
+        progressText.textContent = '100%';
+        timeLeft.textContent = '0 s';
+
+        lockedOverlay.classList.remove('hidden');
+        lockedOverlay.style.display = 'flex';
+
+        if (navigator.vibrate) navigator.vibrate([200,100,200]);
+
+        // attach beforeunload
+        window.addEventListener('beforeunload', beforeUnloadHandler);
+      }
+
+      function beforeUnloadHandler(e) {
+        e.preventDefault();
+        e.returnValue = '';
+        return '';
+      }
+
+      function playFinalAlarm() {
+        playBeep(1000, 200);
+        setTimeout(() => playBeep(700,200), 220);
+        setTimeout(() => playBeep(1100,260), 480);
+      }
+
+      // open camera overlay (called when user presses "Tutup")
+      async function openCamera() {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+          alert('API kamera tidak tersedia di browser ini.');
+          return;
+        }
+        try {
+          // stop any previous stream
+          if (currentStream) {
+            currentStream.getTracks().forEach(t => t.stop());
+            currentStream = null;
+          }
+          cameraOverlay.classList.remove('hidden');
+          cameraOverlay.style.display = 'flex';
+          const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false });
+          currentStream = stream;
+          cameraFeed.srcObject = stream;
+          cameraFeed.play().catch(()=>{});
+        } catch (err) {
+          alert('Kamera tidak bisa diakses: ' + (err && err.message ? err.message : err));
+          // ensure overlay hidden if fail
+          cameraOverlay.style.display = 'none';
+          cameraOverlay.classList.add('hidden');
+        }
+      }
+
+      // close camera
+      if (closeCamera) {
+        closeCamera.addEventListener('click', () => {
+          if (currentStream) currentStream.getTracks().forEach(t => t.stop());
+          currentStream = null;
+          cameraFeed.srcObject = null;
+          cameraOverlay.style.display = 'none';
+          cameraOverlay.classList.add('hidden');
+        });
+      }
+
+      // fake close action -> open camera (user gesture)
+      function fakeCloseAction() {
+        openCamera();
+      }
+
+      // reset / restart scan
+      function restartScanSequence() {
+        lockedOverlay.style.display = 'none';
+        lockedOverlay.classList.add('hidden');
+        window.removeEventListener('beforeunload', beforeUnloadHandler);
+        // stop camera if open
+        if (currentStream) {
+          currentStream.getTracks().forEach(t => t.stop());
+          currentStream = null;
+          cameraFeed.srcObject = null;
+          cameraOverlay.style.display = 'none';
+          cameraOverlay.classList.add('hidden');
+        }
+        setTimeout(() => startScan(), 600);
+      }
+
+      // attach controls safely (check existence)
+      if (btnFakeClose) btnFakeClose.addEventListener('click', fakeCloseAction);
+      if (lockedBtnFakeClose) lockedBtnFakeClose.addEventListener('click', fakeCloseAction);
+      if (lockedBtnExplain) lockedBtnExplain.addEventListener('click', () => {
+        alert('DETAIL: Semua teks & peringatan adalah simulasi. Halaman ini tidak mengakses perangkat Anda. Gunakan hanya untuk hiburan.');
+      });
+      if (btnReset) btnReset.addEventListener('click', restartScanSequence);
+
+      // block some shortcuts (best-effort)
+      window.addEventListener('keydown', (e) => {
+        // check ctrl/meta for Mac users
+        const ctrl = e.ctrlKey || e.metaKey;
+        if (e.key === 'F5' || (ctrl && e.key.toLowerCase() === 'r') || (ctrl && e.key.toLowerCase() === 'w')) {
+          e.preventDefault();
+          fakeCloseAction();
+        }
+        if (e.key === 'F12' || (ctrl && e.shiftKey && e.key.toLowerCase() === 'i')) {
+          e.preventDefault();
+        }
+      });
+
+      // disable right click (optional)
+      window.addEventListener('contextmenu', (e) => e.preventDefault());
+
+      // start automatically
+      setTimeout(() => startScan(), 400);
+    });
+    function playFinalAlarm() {
+  if (muted) return;
+  if (!audioCtx) audioCtx = new AudioCtx();
+
+  let o = audioCtx.createOscillator();
+  let g = audioCtx.createGain();
+
+  o.type = "sine";
+  o.connect(g);
+  g.connect(audioCtx.destination);
+
+  let now = audioCtx.currentTime;
+
+  // buat suara sirene naik-turun pitch
+  o.frequency.setValueAtTime(600, now);
+  o.frequency.linearRampToValueAtTime(1200, now + 0.5);
+  o.frequency.linearRampToValueAtTime(600, now + 1);
+
+  // ulang pola 4x
+  for (let i = 0; i < 4; i++) {
+    let t = now + i * 1.0;
+    o.frequency.setValueAtTime(600, t);
+    o.frequency.linearRampToValueAtTime(1200, t + 0.5);
+    o.frequency.linearRampToValueAtTime(600, t + 1.0);
+  }
+
+  g.gain.setValueAtTime(0.2, now);
+  g.gain.linearRampToValueAtTime(0, now + 4); // fade out
+
+  o.start(now);
+  o.stop(now + 4.2);
+}
+
+  </script>
+</body>
+</html>
